@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>免疫タワーディフェンス - Immune TD</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #0a0a1a; font-family: 'Helvetica Neue', 'Hiragino Sans', sans-serif; }
+canvas { display: block; }
+
+#ui-overlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 10;
+}
+
+/* Top HUD */
+#top-hud {
+    position: absolute; top: 12px; left: 12px; right: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    pointer-events: none;
+}
+.hud-item {
+    background: rgba(10,10,30,0.85); backdrop-filter: blur(8px);
+    border: 1px solid rgba(0,200,150,0.3); border-radius: 10px;
+    padding: 8px 14px; color: #e0f0e8; font-size: 14px; font-weight: 600;
+}
+#hp-bar-wrap {
+    width: 200px; height: 10px; background: #1a2a1a; border-radius: 5px; overflow: hidden; margin-top: 4px;
+}
+#hp-bar { height: 100%; background: linear-gradient(90deg, #00c853, #76ff03); width: 100%; transition: width 0.3s; }
+#hp-bar.low { background: linear-gradient(90deg, #ff1744, #ff6d00); }
+
+/* Tower selection panel */
+#tower-panel {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; pointer-events: auto;
+}
+.tower-btn {
+    width: 70px; height: 80px; background: rgba(10,10,30,0.9);
+    border: 2px solid rgba(0,200,150,0.3); border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.2s; color: #c0e0d0;
+}
+.tower-btn:hover { border-color: #00e676; transform: translateY(-3px); box-shadow: 0 4px 15px rgba(0,230,118,0.3); }
+.tower-btn.selected { border-color: #00e676; background: rgba(0,230,118,0.15); }
+.tower-btn.disabled { opacity: 0.4; pointer-events: none; }
+.tower-icon { font-size: 28px; margin-bottom: 2px; }
+.tower-name { font-size: 9px; font-weight: 600; }
+.tower-cost { font-size: 10px; color: #ffd54f; }
+
+/* Wave button */
+#wave-btn {
+    position: absolute; bottom: 16px; right: 16px;
+    pointer-events: auto; background: linear-gradient(135deg, #00c853, #00e676);
+    border: none; border-radius: 10px; padding: 12px 20px;
+    color: #0a1a0a; font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: all 0.2s; box-shadow: 0 4px 15px rgba(0,200,100,0.4);
+}
+#wave-btn:hover { transform: scale(1.05); }
+#wave-btn:disabled { opacity: 0.5; pointer-events: none; }
+
+/* Info tooltip */
+#tooltip {
+    position: absolute; display: none; pointer-events: none;
+    background: rgba(10,10,30,0.95); border: 1px solid rgba(0,200,150,0.4);
+    border-radius: 8px; padding: 10px 14px; color: #c0e0d0;
+    font-size: 12px; max-width: 200px; z-index: 50;
+}
+
+/* Start screen */
+#start-screen {
+    position: fixed; inset: 0; z-index: 100;
+    background: linear-gradient(135deg, #0a1a1a 0%, #0a0a2a 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #e0f0e8;
+}
+#start-screen h1 { font-size: 44px; margin-bottom: 8px; text-shadow: 0 0 20px rgba(0,200,100,0.5); }
+#start-screen .sub { font-size: 16px; color: #00e676; margin-bottom: 24px; }
+#start-screen .desc { font-size: 13px; color: #8ba89a; max-width: 500px; text-align: center; line-height: 1.6; margin-bottom: 30px; }
+#start-btn {
+    background: linear-gradient(135deg, #00c853, #00e676); border: none;
+    border-radius: 12px; padding: 14px 40px; font-size: 18px; font-weight: 700;
+    color: #0a1a0a; cursor: pointer; transition: transform 0.2s;
+}
+#start-btn:hover { transform: scale(1.05); }
+.hidden { display: none !important; }
+
+/* Game Over */
+#game-over {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(10,5,5,0.95);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #e0f0e8;
+}
+#game-over h1 { font-size: 48px; margin-bottom: 10px; }
+#game-over .stats { font-size: 16px; color: #8ba89a; margin-bottom: 24px; text-align: center; line-height: 1.8; }
+#retry-btn {
+    background: linear-gradient(135deg, #00c853, #00e676); border: none;
+    border-radius: 12px; padding: 14px 40px; font-size: 16px; font-weight: 700;
+    color: #0a1a0a; cursor: pointer;
+}
+
+/* Range indicator */
+#range-indicator { position: absolute; pointer-events: none; }
+
+/* Message popup */
+#popup {
+    position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(10,10,30,0.95); border: 1px solid #00e676; border-radius: 12px;
+    padding: 16px 24px; color: #00e676; font-size: 18px; font-weight: 700;
+    z-index: 60; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
+#popup.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="start-screen">
+    <h1>免疫タワーディフェンス</h1>
+    <div class="sub">Immune Tower Defense</div>
+    <div class="desc">
+        ウイルスや悪玉菌が体に侵入してくる！<br>
+        免疫細胞やビタミンのタワーを設置して、健康を守ろう！<br><br>
+        🖱️ タワーを選んで緑のマスに設置<br>
+        ⬆️ 設置済みタワーをクリックでアップグレード<br>
+        🌊 WAVEボタンで敵の波を開始
+    </div>
+    <button id="start-btn">ゲームスタート</button>
+</div>
+
+<div id="game-over" class="hidden">
+    <h1 id="result-title">GAME OVER</h1>
+    <div class="stats" id="result-stats"></div>
+    <button id="retry-btn">もう一度</button>
+</div>
+
+<div id="ui-overlay">
+    <div id="top-hud">
+        <div class="hud-item">
+            <div>❤️ 体力 <span id="hp-text">20/20</span></div>
+            <div id="hp-bar-wrap"><div id="hp-bar"></div></div>
+        </div>
+        <div class="hud-item">🌊 Wave <span id="wave-text">0/15</span></div>
+        <div class="hud-item">💰 <span id="money-text">100</span> 元気P</div>
+        <div class="hud-item">🏆 <span id="score-text">0</span></div>
+    </div>
+    <div id="tower-panel">
+        <div class="tower-btn" data-tower="vitaminC">
+            <div class="tower-icon">🍊</div>
+            <div class="tower-name">ビタミンC</div>
+            <div class="tower-cost">30P</div>
+        </div>
+        <div class="tower-btn" data-tower="whiteCell">
+            <div class="tower-icon">🔬</div>
+            <div class="tower-name">白血球</div>
+            <div class="tower-cost">50P</div>
+        </div>
+        <div class="tower-btn" data-tower="broccoli">
+            <div class="tower-icon">🥦</div>
+            <div class="tower-name">ブロッコリー</div>
+            <div class="tower-cost">40P</div>
+        </div>
+        <div class="tower-btn" data-tower="sleep">
+            <div class="tower-icon">😴</div>
+            <div class="tower-name">睡眠</div>
+            <div class="tower-cost">60P</div>
+        </div>
+        <div class="tower-btn" data-tower="exercise">
+            <div class="tower-icon">🏃</div>
+            <div class="tower-name">運動</div>
+            <div class="tower-cost">45P</div>
+        </div>
+    </div>
+    <button id="wave-btn">🌊 WAVE START</button>
+    <div id="tooltip"></div>
+    <div id="popup"></div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+    }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ══════════════════════════════════════════════
+//  GAME CONFIG
+// ══════════════════════════════════════════════
+const GRID_SIZE = 16;
+const CELL = 3;
+const MAX_WAVES = 15;
+const MAX_HP = 20;
+
+const TOWER_DATA = {
+    vitaminC: { name: 'ビタミンC', cost: 30, range: 4.5, fireRate: 0.4, damage: 8, color: 0xffa000, projColor: 0xffcc00, desc: '素早く連射。基本防衛に最適' },
+    whiteCell: { name: '白血球', cost: 50, range: 3.5, fireRate: 1.0, damage: 30, color: 0xe0e0e0, projColor: 0xffffff, desc: '高火力・単体攻撃。ボスに強い' },
+    broccoli:  { name: 'ブロッコリー', cost: 40, range: 3.0, fireRate: 0.8, damage: 12, color: 0x2e7d32, projColor: 0x66bb6a, desc: '範囲攻撃で群を殲滅', splash: 2.0 },
+    sleep:     { name: '睡眠', cost: 60, range: 4.0, fireRate: 1.5, damage: 5, color: 0x7c4dff, projColor: 0xb388ff, desc: '敵を減速させる', slow: 0.4 },
+    exercise:  { name: '運動', cost: 45, range: 5.0, fireRate: 0.6, damage: 10, color: 0x00bcd4, projColor: 0x80deea, desc: '長射程・バランス型' },
+};
+
+const ENEMY_TYPES = {
+    virus:      { name: 'ウイルス', hp: 40, speed: 2.0, reward: 8, color: 0xd50000, scale: 1.0 },
+    bacteria:   { name: '悪玉菌', hp: 70, speed: 1.5, reward: 12, color: 0x6a1b9a, scale: 1.1 },
+    junkFood:   { name: 'ジャンクフード', hp: 100, speed: 1.2, reward: 15, color: 0xff6f00, scale: 1.2 },
+    stress:     { name: 'ストレス', hp: 60, speed: 2.5, reward: 10, color: 0x424242, scale: 1.0 },
+    allergen:   { name: 'アレルゲン', hp: 150, speed: 1.8, reward: 20, color: 0xfdd835, scale: 1.2 },
+    bossVirus:  { name: '変異ウイルス', hp: 500, speed: 1.0, reward: 50, color: 0xb71c1c, scale: 2.0 },
+};
+
+// ══════════════════════════════════════════════
+//  THREE.js SETUP
+// ══════════════════════════════════════════════
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a1a);
+scene.fog = new THREE.Fog(0x0a0a1a, 60, 100);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+// Adaptive camera: more top-down on narrow screens
+const aspect = window.innerWidth / window.innerHeight;
+if (aspect < 1) {
+    camera.position.set(0, 55, 15);
+} else {
+    camera.position.set(0, 38, 22);
+}
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+// Lights
+const ambientLight = new THREE.AmbientLight(0x334455, 0.6);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(20, 40, 15);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048, 2048);
+dirLight.shadow.camera.left = -35; dirLight.shadow.camera.right = 35;
+dirLight.shadow.camera.top = 35; dirLight.shadow.camera.bottom = -35;
+scene.add(dirLight);
+
+const rimLight = new THREE.DirectionalLight(0x00e676, 0.3);
+rimLight.position.set(-10, 15, -20);
+scene.add(rimLight);
+
+// ══════════════════════════════════════════════
+//  GRID & PATH
+// ══════════════════════════════════════════════
+// Path definition (grid coords) - winding path through the body
+const PATH_COORDS = [
+    [0, 15], [0, 14], [0, 13], [0, 12], [0, 11], [0, 10],
+    [1, 10], [2, 10], [3, 10], [4, 10], [5, 10], [6, 10], [7, 10],
+    [7, 9], [7, 8], [7, 7], [7, 6],
+    [6, 6], [5, 6], [4, 6], [3, 6], [2, 6],
+    [2, 5], [2, 4], [2, 3],
+    [3, 3], [4, 3], [5, 3], [6, 3], [7, 3], [8, 3], [9, 3], [10, 3],
+    [10, 4], [10, 5], [10, 6], [10, 7], [10, 8],
+    [11, 8], [12, 8], [13, 8], [14, 8],
+    [14, 9], [14, 10], [14, 11], [14, 12], [14, 13],
+    [13, 13], [12, 13], [11, 13], [10, 13],
+    [10, 14], [10, 15]
+];
+
+const grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill('empty'));
+const pathSet = new Set();
+PATH_COORDS.forEach(([x, z]) => {
+    grid[x][z] = 'path';
+    pathSet.add(`${x},${z}`);
+});
+
+// Convert grid coords to world positions
+function gridToWorld(gx, gz) {
+    return new THREE.Vector3(
+        (gx - GRID_SIZE / 2 + 0.5) * CELL,
+        0,
+        (gz - GRID_SIZE / 2 + 0.5) * CELL
+    );
+}
+
+// Path world positions for enemy movement
+const pathWorldPositions = PATH_COORDS.map(([x, z]) => gridToWorld(x, z));
+
+// ══════════════════════════════════════════════
+//  BUILD GROUND & PATH VISUALS
+// ══════════════════════════════════════════════
+const groundGroup = new THREE.Group();
+scene.add(groundGroup);
+
+// Ground plane
+const groundGeo = new THREE.PlaneGeometry(GRID_SIZE * CELL + 4, GRID_SIZE * CELL + 4);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x0d1a14, roughness: 0.9 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.1;
+ground.receiveShadow = true;
+groundGroup.add(ground);
+
+// Grid cells
+const cellGeo = new THREE.BoxGeometry(CELL - 0.15, 0.2, CELL - 0.15);
+const pathMat = new THREE.MeshStandardMaterial({ color: 0x2a0a0a, roughness: 0.6, metalness: 0.3, emissive: 0x1a0505, emissiveIntensity: 0.3 });
+const emptyMat = new THREE.MeshStandardMaterial({ color: 0x0f3a22, roughness: 0.7, transparent: true, opacity: 0.8 });
+const hoverMat = new THREE.MeshStandardMaterial({ color: 0x00e676, roughness: 0.5, transparent: true, opacity: 0.7 });
+
+const cellMeshes = [];
+for (let x = 0; x < GRID_SIZE; x++) {
+    cellMeshes[x] = [];
+    for (let z = 0; z < GRID_SIZE; z++) {
+        const isPath = grid[x][z] === 'path';
+        const mat = isPath ? pathMat : emptyMat;
+        const mesh = new THREE.Mesh(cellGeo, mat.clone());
+        const pos = gridToWorld(x, z);
+        mesh.position.set(pos.x, 0.1, pos.z);
+        mesh.receiveShadow = true;
+        mesh.userData = { gx: x, gz: z, isPath };
+        groundGroup.add(mesh);
+        cellMeshes[x][z] = mesh;
+    }
+}
+
+// Path arrows/glow
+PATH_COORDS.forEach(([x, z], i) => {
+    if (i % 3 !== 0) return;
+    const pos = gridToWorld(x, z);
+    const glowGeo = new THREE.SphereGeometry(0.2, 8, 8);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff1744, transparent: true, opacity: 0.4 });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.set(pos.x, 0.3, pos.z);
+    groundGroup.add(glow);
+});
+
+// Entry and exit markers
+const entryPos = gridToWorld(PATH_COORDS[0][0], PATH_COORDS[0][1]);
+const exitPos = gridToWorld(PATH_COORDS[PATH_COORDS.length - 1][0], PATH_COORDS[PATH_COORDS.length - 1][1]);
+
+function createPortal(pos, color, label) {
+    const group = new THREE.Group();
+    const ringGeo = new THREE.TorusGeometry(1.5, 0.2, 12, 32);
+    const ringMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.5 });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(pos.x, 0.5, pos.z);
+    group.add(ring);
+    scene.add(group);
+    return group;
+}
+const entryPortal = createPortal(entryPos, 0xff1744, '侵入');
+const exitPortal = createPortal(exitPos, 0x00e676, '心臓');
+
+// ══════════════════════════════════════════════
+//  GAME STATE
+// ══════════════════════════════════════════════
+let money = 100;
+let hp = MAX_HP;
+let wave = 0;
+let score = 0;
+let gameStarted = false;
+let waveInProgress = false;
+let gameOver = false;
+let selectedTower = null;
+let hoveredCell = null;
+
+const towers = [];
+const enemies = [];
+const projectiles = [];
+const particles = [];
+
+// ══════════════════════════════════════════════
+//  TOWER CREATION
+// ══════════════════════════════════════════════
+function createTowerMesh(type) {
+    const data = TOWER_DATA[type];
+    const group = new THREE.Group();
+
+    // Base platform with glow
+    const baseGeo = new THREE.CylinderGeometry(1.1, 1.3, 0.5, 8);
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x1a3a2a, metalness: 0.6, roughness: 0.3, emissive: data.color, emissiveIntensity: 0.15 });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.position.y = 0.5;
+    base.castShadow = true;
+    group.add(base);
+
+    // Point light for tower glow
+    const glow = new THREE.PointLight(data.color, 1.5, 6);
+    glow.position.y = 2.5;
+    group.add(glow);
+
+    // Tower body
+    if (type === 'vitaminC') {
+        const bodyGeo = new THREE.SphereGeometry(0.9, 16, 16);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: data.color, metalness: 0.3, roughness: 0.4, emissive: data.color, emissiveIntensity: 0.5 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 1.6;
+        body.castShadow = true;
+        group.add(body);
+    } else if (type === 'whiteCell') {
+        const bodyGeo = new THREE.IcosahedronGeometry(1.0, 1);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: data.color, metalness: 0.5, roughness: 0.2, emissive: 0x9090ff, emissiveIntensity: 0.4 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 1.8;
+        body.castShadow = true;
+        group.add(body);
+    } else if (type === 'broccoli') {
+        const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 1.0, 8);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a7c30 });
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.y = 1.2;
+        group.add(trunk);
+        const topGeo = new THREE.SphereGeometry(0.9, 12, 12);
+        const topMat = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.7, emissive: 0x1b5e20, emissiveIntensity: 0.4 });
+        const top = new THREE.Mesh(topGeo, topMat);
+        top.position.y = 2.2;
+        top.castShadow = true;
+        group.add(top);
+    } else if (type === 'sleep') {
+        const bodyGeo = new THREE.CapsuleGeometry(0.6, 1.0, 8, 16);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: data.color, metalness: 0.2, roughness: 0.6, emissive: data.color, emissiveIntensity: 0.6 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 1.7;
+        body.castShadow = true;
+        group.add(body);
+    } else if (type === 'exercise') {
+        const bodyGeo = new THREE.TorusGeometry(0.7, 0.2, 8, 24);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: data.color, metalness: 0.7, roughness: 0.2, emissive: data.color, emissiveIntensity: 0.3 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 1.8;
+        body.rotation.x = Math.PI / 4;
+        body.castShadow = true;
+        group.add(body);
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.2, 8), bodyMat.clone());
+        bar.position.y = 1.8;
+        bar.rotation.z = Math.PI / 2;
+        group.add(bar);
+    }
+
+    // Range indicator (invisible, shown on hover)
+    const rangeGeo = new THREE.RingGeometry(data.range * CELL - 0.1, data.range * CELL, 48);
+    const rangeMat = new THREE.MeshBasicMaterial({ color: 0x00e676, transparent: true, opacity: 0, side: THREE.DoubleSide });
+    const rangeRing = new THREE.Mesh(rangeGeo, rangeMat);
+    rangeRing.rotation.x = -Math.PI / 2;
+    rangeRing.position.y = 0.3;
+    group.add(rangeRing);
+    group.userData.rangeRing = rangeRing;
+
+    return group;
+}
+
+function placeTower(gx, gz, type) {
+    const data = TOWER_DATA[type];
+    if (money < data.cost) return false;
+    if (grid[gx][gz] !== 'empty') return false;
+
+    money -= data.cost;
+    grid[gx][gz] = 'tower';
+
+    const mesh = createTowerMesh(type);
+    const pos = gridToWorld(gx, gz);
+    mesh.position.set(pos.x, 0, pos.z);
+    scene.add(mesh);
+
+    const tower = {
+        mesh, type, gx, gz,
+        level: 1,
+        damage: data.damage,
+        range: data.range * CELL,
+        fireRate: data.fireRate,
+        cooldown: 0,
+        splash: data.splash || 0,
+        slow: data.slow || 0,
+    };
+    towers.push(tower);
+
+    // Update cell visual
+    cellMeshes[gx][gz].material.color.set(0x002200);
+    cellMeshes[gx][gz].material.opacity = 0.3;
+
+    updateUI();
+    showPopup(`${data.name} 設置！`);
+    return true;
+}
+
+function upgradeTower(tower) {
+    const cost = Math.floor(TOWER_DATA[tower.type].cost * tower.level * 0.7);
+    if (money < cost || tower.level >= 5) return;
+    money -= cost;
+    tower.level++;
+    tower.damage = Math.floor(TOWER_DATA[tower.type].damage * (1 + tower.level * 0.4));
+    tower.range = TOWER_DATA[tower.type].range * CELL * (1 + tower.level * 0.1);
+    tower.fireRate = TOWER_DATA[tower.type].fireRate * Math.max(0.5, 1 - tower.level * 0.1);
+
+    // Visual feedback - scale up slightly
+    tower.mesh.scale.setScalar(1 + tower.level * 0.1);
+    showPopup(`Lv${tower.level}にアップグレード！`);
+    updateUI();
+}
+
+// ══════════════════════════════════════════════
+//  ENEMY CREATION
+// ══════════════════════════════════════════════
+function createEnemyMesh(type) {
+    const data = ENEMY_TYPES[type];
+    const group = new THREE.Group();
+
+    if (type === 'virus') {
+        const bodyGeo = new THREE.IcosahedronGeometry(0.6, 0);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: data.color, emissive: data.color, emissiveIntensity: 0.4, roughness: 0.3 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        group.add(body);
+        // Spikes
+        for (let i = 0; i < 8; i++) {
+            const spike = new THREE.Mesh(
+                new THREE.ConeGeometry(0.08, 0.4, 4),
+                new THREE.MeshStandardMaterial({ color: 0xff5252 })
+            );
+            const phi = Math.random() * Math.PI * 2;
+            const theta = Math.random() * Math.PI;
+            spike.position.set(
+                Math.sin(theta) * Math.cos(phi) * 0.6,
+                Math.sin(theta) * Math.sin(phi) * 0.6,
+                Math.cos(theta) * 0.6
+            );
+            spike.lookAt(0, 0, 0);
+            spike.rotateX(Math.PI);
+            group.add(spike);
+        }
+    } else if (type === 'bacteria') {
+        const bodyGeo = new THREE.CapsuleGeometry(0.4, 0.6, 8, 12);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: data.color, emissive: data.color, emissiveIntensity: 0.3, roughness: 0.5 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.rotation.z = Math.PI / 4;
+        group.add(body);
+    } else if (type === 'junkFood') {
+        // Burger shape
+        const bunGeo = new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+        const bunMat = new THREE.MeshStandardMaterial({ color: 0xd4a030 });
+        const topBun = new THREE.Mesh(bunGeo, bunMat);
+        topBun.position.y = 0.15;
+        group.add(topBun);
+        const patty = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.15, 12), new THREE.MeshStandardMaterial({ color: 0x5d3a1a }));
+        group.add(patty);
+        const botBun = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.45, 0.2, 12), bunMat.clone());
+        botBun.position.y = -0.2;
+        group.add(botBun);
+    } else if (type === 'stress') {
+        const bodyGeo = new THREE.OctahedronGeometry(0.5);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x333333, emissiveIntensity: 0.5, roughness: 0.2, metalness: 0.8 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        group.add(body);
+    } else if (type === 'allergen') {
+        const bodyGeo = new THREE.DodecahedronGeometry(0.5);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: data.color, emissive: data.color, emissiveIntensity: 0.3, roughness: 0.4 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        group.add(body);
+    } else if (type === 'bossVirus') {
+        const bodyGeo = new THREE.IcosahedronGeometry(0.9, 1);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: data.color, emissive: data.color, emissiveIntensity: 0.6, roughness: 0.2, metalness: 0.4 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        group.add(body);
+        for (let i = 0; i < 14; i++) {
+            const spike = new THREE.Mesh(
+                new THREE.ConeGeometry(0.12, 0.6, 4),
+                new THREE.MeshStandardMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.3 })
+            );
+            const phi = Math.random() * Math.PI * 2;
+            const theta = Math.random() * Math.PI;
+            spike.position.set(
+                Math.sin(theta) * Math.cos(phi) * 0.9,
+                Math.sin(theta) * Math.sin(phi) * 0.9,
+                Math.cos(theta) * 0.9
+            );
+            spike.lookAt(0, 0, 0);
+            spike.rotateX(Math.PI);
+            group.add(spike);
+        }
+    }
+
+    // Health bar
+    const hpBarBg = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.2, 0.15),
+        new THREE.MeshBasicMaterial({ color: 0x330000 })
+    );
+    hpBarBg.position.y = 1.2;
+    hpBarBg.rotation.x = -Math.PI / 4;
+    group.add(hpBarBg);
+
+    const hpBar = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.2, 0.15),
+        new THREE.MeshBasicMaterial({ color: 0x00e676 })
+    );
+    hpBar.position.y = 1.2;
+    hpBar.position.z = 0.001;
+    hpBar.rotation.x = -Math.PI / 4;
+    group.add(hpBar);
+    group.userData.hpBar = hpBar;
+
+    group.scale.setScalar(data.scale);
+    return group;
+}
+
+function spawnEnemy(type) {
+    const data = ENEMY_TYPES[type];
+    const mesh = createEnemyMesh(type);
+    const startPos = pathWorldPositions[0].clone();
+    startPos.y = 1.0;
+    mesh.position.copy(startPos);
+    scene.add(mesh);
+
+    const waveScale = 1 + wave * 0.12;
+    enemies.push({
+        mesh, type,
+        hp: Math.floor(data.hp * waveScale),
+        maxHp: Math.floor(data.hp * waveScale),
+        speed: data.speed,
+        baseSpeed: data.speed,
+        reward: data.reward,
+        pathIndex: 0,
+        pathProgress: 0,
+        slowTimer: 0,
+    });
+}
+
+// ══════════════════════════════════════════════
+//  WAVE SYSTEM
+// ══════════════════════════════════════════════
+function getWaveEnemies(waveNum) {
+    const enemies = [];
+    if (waveNum <= 3) {
+        for (let i = 0; i < 5 + waveNum * 2; i++) enemies.push('virus');
+    } else if (waveNum <= 5) {
+        for (let i = 0; i < 4; i++) enemies.push('virus');
+        for (let i = 0; i < 3 + waveNum; i++) enemies.push('bacteria');
+    } else if (waveNum <= 7) {
+        for (let i = 0; i < 3; i++) enemies.push('virus');
+        for (let i = 0; i < 4; i++) enemies.push('bacteria');
+        for (let i = 0; i < waveNum - 4; i++) enemies.push('junkFood');
+    } else if (waveNum <= 10) {
+        for (let i = 0; i < 3; i++) enemies.push('bacteria');
+        for (let i = 0; i < 3; i++) enemies.push('junkFood');
+        for (let i = 0; i < waveNum - 5; i++) enemies.push('stress');
+        for (let i = 0; i < 2; i++) enemies.push('allergen');
+    } else if (waveNum <= 14) {
+        for (let i = 0; i < 4; i++) enemies.push('stress');
+        for (let i = 0; i < 4; i++) enemies.push('allergen');
+        for (let i = 0; i < 3; i++) enemies.push('junkFood');
+        for (let i = 0; i < waveNum - 10; i++) enemies.push('bacteria');
+    } else {
+        // Final wave - boss!
+        for (let i = 0; i < 5; i++) enemies.push('allergen');
+        for (let i = 0; i < 5; i++) enemies.push('stress');
+        enemies.push('bossVirus');
+        enemies.push('bossVirus');
+    }
+    return enemies;
+}
+
+let waveQueue = [];
+let spawnTimer = 0;
+const SPAWN_INTERVAL = 0.6;
+
+function startWave() {
+    if (waveInProgress || gameOver) return;
+    wave++;
+    waveInProgress = true;
+    waveQueue = getWaveEnemies(wave);
+    spawnTimer = 0;
+    document.getElementById('wave-btn').disabled = true;
+    updateUI();
+}
+
+// ══════════════════════════════════════════════
+//  PROJECTILES & PARTICLES
+// ══════════════════════════════════════════════
+function createProjectile(tower, target) {
+    const data = TOWER_DATA[tower.type];
+    const geo = new THREE.SphereGeometry(0.3, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color: data.projColor });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(tower.mesh.position);
+    mesh.position.y = 1.5;
+    scene.add(mesh);
+
+    projectiles.push({
+        mesh,
+        target,
+        tower,
+        speed: 20,
+        damage: tower.damage,
+        splash: tower.splash,
+        slow: tower.slow,
+    });
+}
+
+function createParticle(pos, color, count = 5) {
+    for (let i = 0; i < count; i++) {
+        const geo = new THREE.SphereGeometry(0.1, 4, 4);
+        const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(pos);
+        scene.add(mesh);
+        particles.push({
+            mesh,
+            velocity: new THREE.Vector3(
+                (Math.random() - 0.5) * 4,
+                Math.random() * 3 + 1,
+                (Math.random() - 0.5) * 4
+            ),
+            life: 1.0,
+            decay: 2 + Math.random(),
+        });
+    }
+}
+
+// ══════════════════════════════════════════════
+//  UI
+// ══════════════════════════════════════════════
+function updateUI() {
+    document.getElementById('money-text').textContent = money;
+    document.getElementById('hp-text').textContent = `${hp}/${MAX_HP}`;
+    document.getElementById('wave-text').textContent = `${wave}/${MAX_WAVES}`;
+    document.getElementById('score-text').textContent = score;
+
+    const hpBar = document.getElementById('hp-bar');
+    hpBar.style.width = (hp / MAX_HP * 100) + '%';
+    hpBar.classList.toggle('low', hp < MAX_HP * 0.3);
+
+    // Tower buttons
+    document.querySelectorAll('.tower-btn').forEach(btn => {
+        const type = btn.dataset.tower;
+        const cost = TOWER_DATA[type].cost;
+        btn.classList.toggle('disabled', money < cost);
+        btn.classList.toggle('selected', selectedTower === type);
+    });
+}
+
+function showPopup(text) {
+    const popup = document.getElementById('popup');
+    popup.textContent = text;
+    popup.classList.add('show');
+    setTimeout(() => popup.classList.remove('show'), 1500);
+}
+
+// ══════════════════════════════════════════════
+//  INPUT
+// ══════════════════════════════════════════════
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+// Tower selection
+document.querySelectorAll('.tower-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const type = btn.dataset.tower;
+        if (selectedTower === type) {
+            selectedTower = null;
+        } else {
+            selectedTower = type;
+        }
+        updateUI();
+    });
+});
+
+// Wave button
+document.getElementById('wave-btn').addEventListener('click', startWave);
+
+// Place tower / upgrade on click
+renderer.domElement.addEventListener('click', (e) => {
+    if (!gameStarted || gameOver) return;
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    // Check if clicking on existing tower
+    const towerMeshes = towers.map(t => t.mesh);
+    const towerHits = raycaster.intersectObjects(towerMeshes, true);
+    if (towerHits.length > 0) {
+        let hitObj = towerHits[0].object;
+        while (hitObj.parent && !towers.find(t => t.mesh === hitObj)) hitObj = hitObj.parent;
+        const tower = towers.find(t => t.mesh === hitObj);
+        if (tower) {
+            upgradeTower(tower);
+            return;
+        }
+    }
+
+    // Check grid cells for placement
+    const cellObjects = [];
+    for (let x = 0; x < GRID_SIZE; x++)
+        for (let z = 0; z < GRID_SIZE; z++)
+            cellObjects.push(cellMeshes[x][z]);
+
+    const hits = raycaster.intersectObjects(cellObjects);
+    if (hits.length > 0 && selectedTower) {
+        const cell = hits[0].object;
+        const { gx, gz, isPath } = cell.userData;
+        if (!isPath && grid[gx][gz] === 'empty') {
+            placeTower(gx, gz, selectedTower);
+        }
+    }
+});
+
+// Hover effect
+renderer.domElement.addEventListener('mousemove', (e) => {
+    if (!gameStarted || gameOver) return;
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    // Reset previous hover
+    if (hoveredCell) {
+        const { gx, gz } = hoveredCell.userData;
+        if (grid[gx][gz] === 'empty' && !hoveredCell.userData.isPath) {
+            hoveredCell.material.color.set(0x0a2a1a);
+            hoveredCell.material.opacity = 0.6;
+        }
+        hoveredCell = null;
+    }
+
+    // Hide tower range indicators
+    towers.forEach(t => {
+        if (t.mesh.userData.rangeRing) t.mesh.userData.rangeRing.material.opacity = 0;
+    });
+
+    const cellObjects = [];
+    for (let x = 0; x < GRID_SIZE; x++)
+        for (let z = 0; z < GRID_SIZE; z++)
+            cellObjects.push(cellMeshes[x][z]);
+
+    const hits = raycaster.intersectObjects(cellObjects);
+    if (hits.length > 0) {
+        const cell = hits[0].object;
+        const { gx, gz, isPath } = cell.userData;
+        if (!isPath && grid[gx][gz] === 'empty' && selectedTower) {
+            cell.material.color.set(0x00e676);
+            cell.material.opacity = 0.7;
+            hoveredCell = cell;
+        }
+    }
+
+    // Show range for hovered tower
+    const towerMeshes = towers.map(t => t.mesh);
+    const towerHits = raycaster.intersectObjects(towerMeshes, true);
+    if (towerHits.length > 0) {
+        let hitObj = towerHits[0].object;
+        while (hitObj.parent && !towers.find(t => t.mesh === hitObj)) hitObj = hitObj.parent;
+        const tower = towers.find(t => t.mesh === hitObj);
+        if (tower && tower.mesh.userData.rangeRing) {
+            tower.mesh.userData.rangeRing.material.opacity = 0.3;
+        }
+    }
+});
+
+// ══════════════════════════════════════════════
+//  GAME LOGIC UPDATE
+// ══════════════════════════════════════════════
+function updateEnemies(dt) {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+
+        // Slow effect
+        if (enemy.slowTimer > 0) {
+            enemy.slowTimer -= dt;
+            enemy.speed = enemy.baseSpeed * 0.4;
+        } else {
+            enemy.speed = enemy.baseSpeed;
+        }
+
+        // Move along path
+        if (enemy.pathIndex < pathWorldPositions.length - 1) {
+            const current = pathWorldPositions[enemy.pathIndex];
+            const next = pathWorldPositions[enemy.pathIndex + 1];
+            const dir = new THREE.Vector3().subVectors(next, current);
+            const dist = dir.length();
+            dir.normalize();
+
+            enemy.pathProgress += enemy.speed * dt;
+            if (enemy.pathProgress >= dist) {
+                enemy.pathProgress -= dist;
+                enemy.pathIndex++;
+            }
+
+            if (enemy.pathIndex < pathWorldPositions.length - 1) {
+                const curr = pathWorldPositions[enemy.pathIndex];
+                const nxt = pathWorldPositions[Math.min(enemy.pathIndex + 1, pathWorldPositions.length - 1)];
+                const d = new THREE.Vector3().subVectors(nxt, curr).normalize();
+                enemy.mesh.position.set(
+                    curr.x + d.x * enemy.pathProgress,
+                    1.0 + Math.sin(Date.now() * 0.005 + i) * 0.15,
+                    curr.z + d.z * enemy.pathProgress
+                );
+                // Rotate enemy to face direction
+                enemy.mesh.rotation.y = Math.atan2(d.x, d.z);
+            }
+        } else {
+            // Reached end - damage player
+            hp--;
+            score = Math.max(0, score - 5);
+            scene.remove(enemy.mesh);
+            enemies.splice(i, 1);
+            createParticle(exitPos.clone().setY(1), 0xff1744, 8);
+            if (hp <= 0) endGame(false);
+            updateUI();
+            continue;
+        }
+
+        // Rotate for visual interest
+        enemy.mesh.children[0].rotation.y += dt * 1.5;
+        enemy.mesh.children[0].rotation.x += dt * 0.5;
+
+        // Update HP bar
+        const hpBar = enemy.mesh.userData.hpBar;
+        if (hpBar) {
+            hpBar.scale.x = Math.max(0, enemy.hp / enemy.maxHp);
+            hpBar.position.x = -(1 - hpBar.scale.x) * 0.6;
+            hpBar.material.color.set(enemy.hp / enemy.maxHp > 0.5 ? 0x00e676 : (enemy.hp / enemy.maxHp > 0.25 ? 0xffd54f : 0xff1744));
+        }
+    }
+}
+
+function updateTowers(dt) {
+    towers.forEach(tower => {
+        tower.cooldown -= dt;
+        if (tower.cooldown > 0) return;
+
+        // Find target in range
+        let target = null;
+        let maxProgress = -1;
+        enemies.forEach(enemy => {
+            const dist = tower.mesh.position.distanceTo(enemy.mesh.position);
+            if (dist <= tower.range) {
+                // Prioritize enemies furthest along the path
+                const progress = enemy.pathIndex + enemy.pathProgress;
+                if (progress > maxProgress) {
+                    maxProgress = progress;
+                    target = enemy;
+                }
+            }
+        });
+
+        if (target) {
+            tower.cooldown = tower.fireRate;
+            createProjectile(tower, target);
+            // Tower animation
+            if (tower.mesh.children[2]) {
+                tower.mesh.children[2].scale.setScalar(1.3);
+                setTimeout(() => {
+                    if (tower.mesh.children[2]) tower.mesh.children[2].scale.setScalar(1);
+                }, 100);
+            }
+        }
+    });
+}
+
+function updateProjectiles(dt) {
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        const proj = projectiles[i];
+        if (!proj.target || !enemies.includes(proj.target)) {
+            scene.remove(proj.mesh);
+            projectiles.splice(i, 1);
+            continue;
+        }
+
+        const dir = new THREE.Vector3().subVectors(proj.target.mesh.position, proj.mesh.position);
+        const dist = dir.length();
+
+        if (dist < 0.5) {
+            // Hit!
+            proj.target.hp -= proj.damage;
+            createParticle(proj.mesh.position.clone(), TOWER_DATA[proj.tower.type].projColor, 3);
+
+            // Slow effect
+            if (proj.slow > 0) {
+                proj.target.slowTimer = 2.0;
+            }
+
+            // Splash damage
+            if (proj.splash > 0) {
+                enemies.forEach(enemy => {
+                    if (enemy !== proj.target) {
+                        const d = enemy.mesh.position.distanceTo(proj.mesh.position);
+                        if (d < proj.splash) {
+                            enemy.hp -= Math.floor(proj.damage * 0.6);
+                        }
+                    }
+                });
+                createParticle(proj.mesh.position.clone(), 0x66bb6a, 8);
+            }
+
+            // Check if enemy died
+            if (proj.target.hp <= 0) {
+                money += proj.target.reward;
+                score += proj.target.reward * 2;
+                createParticle(proj.target.mesh.position.clone(), ENEMY_TYPES[proj.target.type].color, 10);
+                scene.remove(proj.target.mesh);
+                const idx = enemies.indexOf(proj.target);
+                if (idx >= 0) enemies.splice(idx, 1);
+                updateUI();
+            }
+
+            scene.remove(proj.mesh);
+            projectiles.splice(i, 1);
+        } else {
+            dir.normalize().multiplyScalar(proj.speed * dt);
+            proj.mesh.position.add(dir);
+        }
+    }
+}
+
+function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= p.decay * dt;
+        p.velocity.y -= 8 * dt;
+        p.mesh.position.add(p.velocity.clone().multiplyScalar(dt));
+        p.mesh.material.opacity = Math.max(0, p.life);
+        p.mesh.scale.setScalar(p.life);
+
+        if (p.life <= 0) {
+            scene.remove(p.mesh);
+            particles.splice(i, 1);
+        }
+    }
+}
+
+function updateSpawner(dt) {
+    if (!waveInProgress || waveQueue.length === 0) return;
+    spawnTimer += dt;
+    if (spawnTimer >= SPAWN_INTERVAL) {
+        spawnTimer = 0;
+        const type = waveQueue.shift();
+        spawnEnemy(type);
+    }
+
+    // Wave complete when all spawned and all dead
+    if (waveQueue.length === 0 && enemies.length === 0) {
+        waveInProgress = false;
+        document.getElementById('wave-btn').disabled = false;
+        money += 20 + wave * 5;
+        score += 50;
+        showPopup(`Wave ${wave} クリア！ +${20 + wave * 5}P`);
+        updateUI();
+
+        if (wave >= MAX_WAVES) {
+            endGame(true);
+        }
+    }
+}
+
+function endGame(won) {
+    gameOver = true;
+    const screen = document.getElementById('game-over');
+    screen.classList.remove('hidden');
+    document.getElementById('result-title').textContent = won ? '🎉 免疫力MAX！クリア！' : '💀 GAME OVER';
+    document.getElementById('result-stats').innerHTML = `
+        到達Wave: ${wave}/${MAX_WAVES}<br>
+        スコア: ${score}<br>
+        設置タワー: ${towers.length}
+    `;
+}
+
+// ══════════════════════════════════════════════
+//  ANIMATION LOOP
+// ══════════════════════════════════════════════
+const clock = new THREE.Clock();
+let time = 0;
+
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    time += dt;
+
+    if (!gameStarted) {
+        // Rotate camera around the scene
+        camera.position.x = Math.sin(time * 0.2) * 30;
+        camera.position.y = 40;
+        camera.position.z = Math.cos(time * 0.2) * 25;
+        camera.lookAt(0, 0, 0);
+        renderer.render(scene, camera);
+        return;
+    }
+
+    if (!gameOver) {
+        updateSpawner(dt);
+        updateEnemies(dt);
+        updateTowers(dt);
+        updateProjectiles(dt);
+    }
+    updateParticles(dt);
+
+    // Animate portals
+    entryPortal.children[0].rotation.z += dt * 2;
+    exitPortal.children[0].rotation.z -= dt * 2;
+
+    // Animate tower idle
+    towers.forEach((t, idx) => {
+        if (t.mesh.children[2]) {
+            t.mesh.children[2].position.y = 1.6 + Math.sin(time * 2 + idx) * 0.1;
+            t.mesh.children[2].rotation.y += dt * 0.5;
+        }
+    });
+
+    renderer.render(scene, camera);
+}
+
+// ══════════════════════════════════════════════
+//  START / RESTART
+// ══════════════════════════════════════════════
+document.getElementById('start-btn').addEventListener('click', () => {
+    document.getElementById('start-screen').classList.add('hidden');
+    gameStarted = true;
+    if (window.innerWidth / window.innerHeight < 1) {
+        camera.position.set(0, 55, 15);
+    } else {
+        camera.position.set(0, 38, 22);
+    }
+    camera.lookAt(0, 0, 0);
+    updateUI();
+});
+
+document.getElementById('retry-btn').addEventListener('click', () => {
+    location.reload();
+});
+
+// Window resize
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (window.innerWidth / window.innerHeight < 1) {
+        camera.position.set(0, 55, 15);
+    } else {
+        camera.position.set(0, 38, 22);
+    }
+    camera.lookAt(0, 0, 0);
+});
+
+animate();
+</script>
+</body>
+</html>
