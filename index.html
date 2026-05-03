@@ -410,7 +410,6 @@ function createPortal(pos, color, label) {
     const group = new THREE.Group();
     if (blenderLoaded && blenderModels['Portal']) {
         const model = cloneBlenderModel('Portal');
-        model.rotation.x = -Math.PI / 2;
         model.position.set(pos.x, 0.5, pos.z);
         model.scale.set(0.9, 0.9, 0.9);
         // Tint the portal to the desired color
@@ -469,7 +468,6 @@ function createTowerMesh(type) {
     const modelName = TOWER_MODEL_MAP[type];
     if (blenderLoaded && modelName && blenderModels[modelName]) {
         const model = cloneBlenderModel(modelName);
-        model.rotation.x = -Math.PI / 2;
         model.scale.set(1.0, 1.0, 1.0);
         group.add(model);
     } else {
@@ -598,7 +596,6 @@ function createEnemyMesh(type) {
     const modelName = ENEMY_MODEL_MAP[type];
     if (blenderLoaded && modelName && blenderModels[modelName]) {
         const model = cloneBlenderModel(modelName);
-        model.rotation.x = -Math.PI / 2;
         model.scale.set(1.0, 1.0, 1.0);
         group.add(model);
     } else {
@@ -1086,12 +1083,16 @@ function updateParticles(dt) {
 }
 
 function updateSpawner(dt) {
-    if (!waveInProgress || waveQueue.length === 0) return;
-    spawnTimer += dt;
-    if (spawnTimer >= SPAWN_INTERVAL) {
-        spawnTimer = 0;
-        const type = waveQueue.shift();
-        spawnEnemy(type);
+    if (!waveInProgress) return;
+
+    // Spawn enemies from queue
+    if (waveQueue.length > 0) {
+        spawnTimer += dt;
+        if (spawnTimer >= SPAWN_INTERVAL) {
+            spawnTimer = 0;
+            const type = waveQueue.shift();
+            spawnEnemy(type);
+        }
     }
 
     // Wave complete when all spawned and all dead
@@ -1151,14 +1152,14 @@ function animate() {
     updateParticles(dt);
 
     // Animate portals
-    entryPortal.children[0].rotation.z += dt * 2;
-    exitPortal.children[0].rotation.z -= dt * 2;
+    if (entryPortal && entryPortal.children[0]) entryPortal.children[0].rotation.y += dt * 2;
+    if (exitPortal && exitPortal.children[0]) exitPortal.children[0].rotation.y -= dt * 2;
 
-    // Animate tower idle
+    // Animate tower idle - rotate the first child (Blender model or base)
     towers.forEach((t, idx) => {
-        if (t.mesh.children[2]) {
-            t.mesh.children[2].position.y = 1.6 + Math.sin(time * 2 + idx) * 0.1;
-            t.mesh.children[2].rotation.y += dt * 0.5;
+        const child = t.mesh.children[0];
+        if (child) {
+            child.rotation.y += dt * 0.3;
         }
     });
 
